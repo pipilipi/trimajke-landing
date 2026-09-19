@@ -2,59 +2,166 @@
 <html lang="sr">
 <head>
 <meta charset="UTF-8">
-<title>Prodavnice – široka pretraga (OSM)</title>
+<title>Prodavnice – Boka i Primorje (OSM)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <style>
   html, body { margin:0; height:100%; font-family:'Segoe UI',sans-serif; }
-  #map { position:absolute; top:0; bottom:0; left:380px; right:0; }
+  #map { position:absolute; top:0; bottom:0; left:400px; right:0; }
   #sidebar {
-    position:absolute; top:0; bottom:0; left:0; width:380px;
+    position:absolute; top:0; bottom:0; left:0; width:400px;
     background:#1e2a38; color:#eee; overflow-y:auto; padding:15px; z-index:1000;
   }
   h2 { margin:0 0 8px; font-size:16px; color:#4fc3f7; }
   p.note { font-size:12px; color:#90a4ae; line-height:1.5; margin:0 0 12px; }
-  input, button {
+  input[type=text], button {
     width:100%; padding:9px; margin-bottom:6px; border-radius:5px;
     border:1px solid #455a64; background:#263238; color:#eee; font-size:13px;
   }
   button { background:#0288d1; border:none; font-weight:600; cursor:pointer; }
   button:hover { background:#039be5; }
   button.sec { background:#455a64; }
+  button.sec:hover { background:#546e7a; }
+
+  /* ---- FILTER BOX ---- */
+  .filter-box {
+    background:#263238; border-radius:8px; padding:12px; margin:12px 0;
+    border:1px solid #37474f;
+  }
+  .filter-box h4 {
+    margin:0 0 10px; font-size:11px; color:#4fc3f7;
+    text-transform:uppercase; letter-spacing:1.2px;
+  }
+  .filter-item {
+    padding:8px 0; border-bottom:1px solid #1e2a38;
+  }
+  .filter-item:last-child { border-bottom:none; }
+  .filter-item .label {
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:13px; margin-bottom:6px;
+  }
+  .filter-item .label .name { color:#eceff1; }
+  .filter-item .label .cnt {
+    color:#90a4ae; font-size:11px; background:#1e2a38;
+    padding:1px 7px; border-radius:10px;
+  }
+  /* Tri-state toggle */
+  .tristate {
+    display:grid; grid-template-columns: 1fr 1fr 1fr; gap:4px;
+  }
+  .tristate button {
+    padding:6px 4px; margin:0; font-size:11px; font-weight:600;
+    background:#37474f; color:#b0bec5; border:none; border-radius:4px;
+    cursor:pointer; transition: all 0.15s;
+  }
+  .tristate button:hover { background:#455a64; }
+  .tristate button.active.sve    { background:#0288d1; color:#fff; }
+  .tristate button.active.sakrij { background:#c0392b; color:#fff; }
+  .tristate button.active.samo   { background:#27ae60; color:#fff; }
+
   #stats { background:#263238; padding:10px; border-radius:5px; font-size:12px; color:#b0bec5; line-height:1.6; margin:10px 0;}
   #stats b { color:#4fc3f7; }
-  #lista { font-size:12px; }
+  #lista { font-size:12px; margin-top:8px; }
   .item { padding:7px; border-bottom:1px solid #263238; cursor:pointer; }
   .item:hover { background:#263238; }
   .item .naziv { color:#fff; font-weight:600; }
   .item .meta { color:#90a4ae; font-size:11px; }
+  .item.skryven { display:none; }
+
   .tagbadge {
     display:inline-block; background:#37474f; color:#4fc3f7; font-size:10px;
     padding:1px 5px; border-radius:3px; margin-right:3px;
   }
   .leaflet-popup-content { font-size:13px; }
   .leaflet-popup-content b { color:#01579b; }
+  .veliki-badge {
+    display:inline-block; color:#fff; font-size:10px;
+    padding:2px 6px; border-radius:3px; font-weight:bold; margin-bottom:4px;
+  }
+  .badge-velika { background:#c0392b; }
+  .badge-pekara { background:#9b59b6; }
+
+  /* Legenda sa desne strane */
+  #legend {
+    position:absolute; bottom:20px; right:20px; z-index:900;
+    background:rgba(30,42,56,0.92); padding:10px 12px; border-radius:6px;
+    font-size:11px; color:#eee; box-shadow:0 2px 8px rgba(0,0,0,0.4);
+  }
+  #legend .row { display:flex; align-items:center; gap:6px; padding:2px 0; }
+  #legend .dot { width:11px; height:11px; border-radius:50%; border:2px solid #fff; }
 </style>
 </head>
 <body>
 
 <div id="sidebar">
-  <h2>🛒 Široka pretraga prodavnica</h2>
+  <h2>🛒 Prodavnice – Boka i Primorje</h2>
   <p class="note">
-    Traži <b>sve</b> što liči na prodavnicu: po <code>shop=*</code>, <code>amenity=*</code>,
-    i po <b>imenu</b> (market, prodavnica, dućan, radnja, minimarket, piljara…).
-    Pokriva celu Boku + Budvu + Bar.
+    Podaci iz <b>OpenStreetMap</b>. Za svaku kategoriju izaberi:
+    <b>Sve</b> · <b>Sakrij</b> · <b>Samo</b>.
   </p>
+
+  <div class="filter-box">
+    <h4>Filteri</h4>
+
+    <!-- VEĆE SAMOPOSLUGE -->
+    <div class="filter-item">
+      <div class="label">
+        <span class="name">🏪 Veće samoposluge</span>
+        <span class="cnt" id="cVelike">0</span>
+      </div>
+      <div class="tristate" data-filter="velike">
+        <button data-val="sve" class="active sve">Sve</button>
+        <button data-val="sakrij" class="sakrij">Sakrij</button>
+        <button data-val="samo" class="samo">Samo</button>
+      </div>
+    </div>
+
+    <!-- PEKARE -->
+    <div class="filter-item">
+      <div class="label">
+        <span class="name">🥖 Pekare</span>
+        <span class="cnt" id="cPekare">0</span>
+      </div>
+      <div class="tristate" data-filter="pekare">
+        <button data-val="sve" class="active sve">Sve</button>
+        <button data-val="sakrij" class="sakrij">Sakrij</button>
+        <button data-val="samo" class="samo">Samo</button>
+      </div>
+    </div>
+
+    <!-- BEZ IMENA -->
+    <div class="filter-item">
+      <div class="label">
+        <span class="name">❓ Bez naziva</span>
+        <span class="cnt" id="cBezImena">0</span>
+      </div>
+      <div class="tristate" data-filter="bezImena">
+        <button data-val="sve" class="active sve">Sve</button>
+        <button data-val="sakrij" class="sakrij">Sakrij</button>
+        <button data-val="samo" class="samo">Samo</button>
+      </div>
+    </div>
+  </div>
+
   <input type="text" id="custom" placeholder="Dodatna reč u imenu (npr. Slavica)">
   <button id="btnLoad">Učitaj iz OSM</button>
+  <button id="btnReset" class="sec">Resetuj sve filtere</button>
   <button id="btnCSV" class="sec">Preuzmi kao CSV</button>
   <div id="stats">Klikni „Učitaj".</div>
   <div id="lista"></div>
 </div>
 
 <div id="map"></div>
+
+<div id="legend">
+  <div class="row"><span class="dot" style="background:#e74c3c"></span> supermarket</div>
+  <div class="row"><span class="dot" style="background:#3498db"></span> convenience</div>
+  <div class="row"><span class="dot" style="background:#27ae60"></span> grocery</div>
+  <div class="row"><span class="dot" style="background:#9b59b6"></span> pekara</div>
+  <div class="row"><span class="dot" style="background:#ec407a"></span> samo ime (bez taga)</div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -67,7 +174,31 @@ const cluster = L.markerClusterGroup({ maxClusterRadius: 40 }).addTo(map);
 
 const BBOX = "41.95,18.45,42.70,19.40";
 let sviPodaci = [];
+let markeriMap = new Map();
 
+// Stanje filtera: 'sve' | 'sakrij' | 'samo'
+const filteri = { velike: 'sve', pekare: 'sve', bezImena: 'sve' };
+
+// ---------- DETEKCIJA ----------
+const VELIKI_LANCI = ['voli', 'idea', 'franca', 'aroma', 'roda', 'mercator', 'univerexport', 'dis'];
+
+function jeVelikaSamoposluga(p) {
+  const naziv = (p.naziv || '').toLowerCase();
+  if (VELIKI_LANCI.some(l => naziv.includes(l))) return true;
+  if (p.shop === 'supermarket') return true;
+  return false;
+}
+function jePekara(p) {
+  const naziv = (p.naziv || '').toLowerCase();
+  if (naziv.includes('pekara') || naziv.includes('pekare') || naziv.includes('bakery')) return true;
+  if (p.shop === 'bakery' || p.shop === 'pastry') return true;
+  return false;
+}
+function jeBezImena(p) {
+  return !p.naziv || p.naziv === '(bez naziva)';
+}
+
+// ---------- UČITAVANJE ----------
 async function ucitaj() {
   const stats = document.getElementById('stats');
   stats.innerHTML = '⏳ Povlačim iz OSM-a... (može 20–40 s)';
@@ -75,7 +206,6 @@ async function ucitaj() {
   const custom = document.getElementById('custom').value.trim();
   const customFilter = custom ? `["name"~"${custom}",i]` : '';
 
-  // Široka pretraga: shop, amenity, i po imenu
   const query = `
     [out:json][timeout:120];
     (
@@ -83,8 +213,8 @@ async function ucitaj() {
       way["shop"](${BBOX});
       node["amenity"~"^(convenience|marketplace)$"](${BBOX});
       way["amenity"~"^(convenience|marketplace)$"](${BBOX});
-      node["name"~"prodavnica|market|minimarket|dućan|ducan|radnja|piljara|Slavica|mesara|pekara|bakery",i](${BBOX});
-      way["name"~"prodavnica|market|minimarket|dućan|ducan|radnja|piljara|Slavica|mesara|pekara|bakery",i](${BBOX});
+      node["name"~"prodavnica|market|minimarket|dućan|ducan|radnja|piljara|Slavica|mesara|pekara|bakery|Voli|Idea|Franca",i](${BBOX});
+      way["name"~"prodavnica|market|minimarket|dućan|ducan|radnja|piljara|Slavica|mesara|pekara|bakery|Voli|Idea|Franca",i](${BBOX});
       node${customFilter}(${BBOX});
       way${customFilter}(${BBOX});
     );
@@ -99,7 +229,6 @@ async function ucitaj() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
 
-    // Deduplikacija po OSM id-u
     const seen = new Set();
     sviPodaci = [];
     data.elements.forEach(el => {
@@ -110,7 +239,7 @@ async function ucitaj() {
       if (seen.has(key)) return;
       seen.add(key);
 
-      sviPodaci.push({
+      const p = {
         id: el.id,
         osmType: el.type,
         naziv: el.tags?.name || '(bez naziva)',
@@ -121,20 +250,27 @@ async function ucitaj() {
         tel: el.tags?.phone || '',
         lat, lon,
         osmLink: `https://www.openstreetmap.org/${el.type}/${el.id}`
-      });
+      };
+      p.velika   = jeVelikaSamoposluga(p);
+      p.pekara   = jePekara(p);
+      p.bezImena = jeBezImena(p);
+      sviPodaci.push(p);
     });
 
-    prikazi();
+    document.getElementById('cVelike').textContent   = sviPodaci.filter(p => p.velika).length;
+    document.getElementById('cPekare').textContent   = sviPodaci.filter(p => p.pekara).length;
+    document.getElementById('cBezImena').textContent = sviPodaci.filter(p => p.bezImena).length;
+
+    izgradiMarkere();
+    primeniFilter();
   } catch (err) {
     stats.innerHTML = '❌ Greška: ' + err.message + '<br>Pokušaj ponovo — Overpass je često zauzet.';
   }
 }
 
-function prikazi() {
-  cluster.clearLayers();
-  const lista = document.getElementById('lista');
-  lista.innerHTML = '';
-
+// ---------- IZGRADNJA MARKERA (jednom) ----------
+function izgradiMarkere() {
+  markeriMap.clear();
   const boje = {
     supermarket:'#e74c3c', convenience:'#3498db', grocery:'#27ae60',
     general:'#f39c12', bakery:'#9b59b6', greengrocer:'#16a085',
@@ -152,8 +288,10 @@ function prikazi() {
       iconSize: [15,15], iconAnchor: [7.5,7.5]
     });
 
-    L.marker([p.lat, p.lon], { icon })
+    const marker = L.marker([p.lat, p.lon], { icon })
       .bindPopup(`
+        ${p.velika ? '<div class="veliki-badge badge-velika">VELIKA SAMOPOSLUGA</div><br>' : ''}
+        ${p.pekara ? '<div class="veliki-badge badge-pekara">PEKARA</div><br>' : ''}
         <b>${p.naziv}</b><br>
         ${p.shop ? '<span class="tagbadge">shop=' + p.shop + '</span>' : ''}
         ${p.amenity ? '<span class="tagbadge">amenity=' + p.amenity + '</span>' : ''}
@@ -162,33 +300,94 @@ function prikazi() {
         ${p.mesto ? '<b>Mesto:</b> ' + p.mesto + '<br>' : ''}
         <a href="${p.osmLink}" target="_blank">OSM</a> ·
         <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank">Google Maps</a>
-      `)
-      .addTo(cluster);
+      `);
 
+    marker._data = p;
+    markeriMap.set(p.id, marker);
+  });
+}
+
+// ---------- PRIMENA FILTERA ----------
+function prosaoFilter(p) {
+  // VELIKE
+  if (filteri.velike === 'sakrij' && p.velika) return false;
+  if (filteri.velike === 'samo'   && !p.velika) return false;
+  // PEKARE
+  if (filteri.pekare === 'sakrij' && p.pekara) return false;
+  if (filteri.pekare === 'samo'   && !p.pekara) return false;
+  // BEZ IMENA
+  if (filteri.bezImena === 'sakrij' && p.bezImena) return false;
+  if (filteri.bezImena === 'samo'   && !p.bezImena) return false;
+  return true;
+}
+
+function primeniFilter() {
+  cluster.clearLayers();
+  const lista = document.getElementById('lista');
+  lista.innerHTML = '';
+
+  let prikazano = 0, skriveno = 0;
+  const vidljivi = [];
+
+  sviPodaci.forEach(p => {
+    if (!prosaoFilter(p)) { skriveno++; return; }
+    prikazano++;
+    vidljivi.push(p);
+    cluster.addLayer(markeriMap.get(p.id));
+
+    // Lista
     const div = document.createElement('div');
     div.className = 'item';
-    div.innerHTML = `<div class="naziv">${p.naziv}</div>
+    const badges = [];
+    if (p.velika) badges.push('<span class="tagbadge" style="background:#c0392b;color:#fff">VELIKA</span>');
+    if (p.pekara) badges.push('<span class="tagbadge" style="background:#9b59b6;color:#fff">PEKARA</span>');
+    div.innerHTML = `<div class="naziv">${badges.join('')}${p.naziv}</div>
                      <div class="meta">${p.shop || p.amenity || '—'}${p.mesto ? ' · ' + p.mesto : ''}</div>`;
     div.onclick = () => map.setView([p.lat, p.lon], 17);
     lista.appendChild(div);
   });
 
   document.getElementById('stats').innerHTML =
-    `✅ <b>${sviPodaci.length}</b> objekata pronađeno.<br>
-     Uključeni su i oni bez <code>shop</code> taga ako im ime sadrži ključne reči.`;
+    `✅ Prikazano: <b>${prikazano}</b> / ${sviPodaci.length}<br>
+     Skriveno: <b>${skriveno}</b>`;
 
-  if (sviPodaci.length) {
-    const b = L.latLngBounds(sviPodaci.map(p => [p.lat, p.lon]));
+  if (vidljivi.length > 0) {
+    const b = L.latLngBounds(vidljivi.map(p => [p.lat, p.lon]));
     map.fitBounds(b.pad(0.1));
   }
 }
 
-document.getElementById('btnLoad').onclick = ucitaj;
+// ---------- TRI-STATE DUGMAD ----------
+document.querySelectorAll('.tristate').forEach(group => {
+  const key = group.dataset.filter;
+  group.querySelectorAll('button').forEach(btn => {
+    btn.onclick = () => {
+      group.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      filteri[key] = btn.dataset.val;
+      primeniFilter();
+    };
+  });
+});
+
+// ---------- RESET ----------
+document.getElementById('btnReset').onclick = () => {
+  filteri.velike = 'sve';
+  filteri.pekare = 'sve';
+  filteri.bezImena = 'sve';
+  document.querySelectorAll('.tristate').forEach(group => {
+    group.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    group.querySelector('button[data-val="sve"]').classList.add('active');
+  });
+  primeniFilter();
+};
+
+// ---------- CSV ----------
 document.getElementById('btnCSV').onclick = () => {
   if (!sviPodaci.length) return alert('Prvo učitaj.');
-  const h = 'Naziv,Shop,Amenity,Ulica,Mesto,Telefon,Lat,Lon,OSM\n';
+  const h = 'Naziv,Shop,Amenity,Ulica,Mesto,Telefon,Lat,Lon,Velika,Pekara,BezImena,OSM\n';
   const r = sviPodaci.map(p =>
-    `"${p.naziv}","${p.shop}","${p.amenity}","${p.ulica}","${p.mesto}","${p.tel}",${p.lat},${p.lon},${p.osmLink}`
+    `"${p.naziv}","${p.shop}","${p.amenity}","${p.ulica}","${p.mesto}","${p.tel}",${p.lat},${p.lon},${p.velika},${p.pekara},${p.bezImena},"${p.osmLink}"`
   ).join('\n');
   const blob = new Blob([h+r], { type:'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
@@ -197,6 +396,7 @@ document.getElementById('btnCSV').onclick = () => {
   a.click();
 };
 
+document.getElementById('btnLoad').onclick = ucitaj;
 ucitaj();
 </script>
 </body>
