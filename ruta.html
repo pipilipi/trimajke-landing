@@ -2,186 +2,59 @@
 <html lang="sr">
 <head>
 <meta charset="UTF-8">
-<title>Prodavnice hrane – Boka i Primorje (OSM)</title>
+<title>Prodavnice – široka pretraga (OSM)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <style>
   html, body { margin:0; height:100%; font-family:'Segoe UI',sans-serif; }
-  #map { position:absolute; top:0; bottom:0; left:400px; right:0; }
+  #map { position:absolute; top:0; bottom:0; left:380px; right:0; }
   #sidebar {
-    position:absolute; top:0; bottom:0; left:0; width:400px;
+    position:absolute; top:0; bottom:0; left:0; width:380px;
     background:#1e2a38; color:#eee; overflow-y:auto; padding:15px; z-index:1000;
   }
   h2 { margin:0 0 8px; font-size:16px; color:#4fc3f7; }
   p.note { font-size:12px; color:#90a4ae; line-height:1.5; margin:0 0 12px; }
-  input[type=text], button {
+  input, button {
     width:100%; padding:9px; margin-bottom:6px; border-radius:5px;
     border:1px solid #455a64; background:#263238; color:#eee; font-size:13px;
   }
   button { background:#0288d1; border:none; font-weight:600; cursor:pointer; }
   button:hover { background:#039be5; }
-  button:disabled { opacity:0.5; cursor:wait; }
   button.sec { background:#455a64; }
-  button.sec:hover { background:#546e7a; }
-
-  /* ---- FILTER BOX ---- */
-  .filter-box {
-    background:#263238; border-radius:8px; padding:12px; margin:12px 0;
-    border:1px solid #37474f;
-  }
-  .filter-box h4 {
-    margin:0 0 10px; font-size:11px; color:#4fc3f7;
-    text-transform:uppercase; letter-spacing:1.2px;
-  }
-  .filter-item {
-    display:flex; align-items:center; gap:10px;
-    padding:9px 0; border-bottom:1px solid #1e2a38;
-    font-size:13px; cursor:pointer; user-select:none;
-  }
-  .filter-item:last-child { border-bottom:none; }
-  .filter-item:hover { background:rgba(79,195,247,0.05); }
-  .filter-item .name { flex:1; color:#eceff1; }
-  .filter-item .count {
-    color:#90a4ae; font-size:11px; background:#1e2a38;
-    padding:1px 7px; border-radius:10px; min-width:26px; text-align:center;
-  }
-
-  /* ---- ON/OFF SWITCH ---- */
-  .switch {
-    position: relative;
-    display: inline-block;
-    width: 42px; height: 22px;
-    flex-shrink: 0;
-  }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .slider {
-    position: absolute; cursor: pointer;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #455a64;
-    transition: .25s;
-    border-radius: 22px;
-  }
-  .slider:before {
-    position: absolute; content: "";
-    height: 16px; width: 16px;
-    left: 3px; bottom: 3px;
-    background-color: #fff;
-    transition: .25s;
-    border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-  }
-  .switch input:checked + .slider {
-    background-color: #27ae60;
-  }
-  .switch input:checked + .slider:before {
-    transform: translateX(20px);
-  }
-  .switch input:focus + .slider {
-    box-shadow: 0 0 3px #4fc3f7;
-  }
-
   #stats { background:#263238; padding:10px; border-radius:5px; font-size:12px; color:#b0bec5; line-height:1.6; margin:10px 0;}
   #stats b { color:#4fc3f7; }
-  #stats.err { background:#4a1a1a; color:#ffcdd2; }
-  #stats.ok  { background:#1b3a2a; color:#c8e6c9; }
-  #stats.warn { background:#4a3a1a; color:#ffe0b2; }
-
-  #lista { font-size:12px; margin-top:8px; }
+  #lista { font-size:12px; }
   .item { padding:7px; border-bottom:1px solid #263238; cursor:pointer; }
   .item:hover { background:#263238; }
   .item .naziv { color:#fff; font-weight:600; }
   .item .meta { color:#90a4ae; font-size:11px; }
-
   .tagbadge {
     display:inline-block; background:#37474f; color:#4fc3f7; font-size:10px;
     padding:1px 5px; border-radius:3px; margin-right:3px;
   }
   .leaflet-popup-content { font-size:13px; }
   .leaflet-popup-content b { color:#01579b; }
-  .veliki-badge {
-    display:inline-block; color:#fff; font-size:10px;
-    padding:2px 6px; border-radius:3px; font-weight:bold; margin-bottom:4px;
-  }
-  .badge-velika { background:#c0392b; }
-  .badge-pekara { background:#9b59b6; }
-
-  #legend {
-    position:absolute; bottom:20px; right:20px; z-index:900;
-    background:rgba(30,42,56,0.92); padding:10px 12px; border-radius:6px;
-    font-size:11px; color:#eee; box-shadow:0 2px 8px rgba(0,0,0,0.4);
-  }
-  #legend .row { display:flex; align-items:center; gap:6px; padding:2px 0; }
-  #legend .dot { width:11px; height:11px; border-radius:50%; border:2px solid #fff; }
-
-  .spinner {
-    display:inline-block; width:10px; height:10px;
-    border:2px solid #4fc3f7; border-top-color:transparent;
-    border-radius:50%; animation:spin 0.8s linear infinite;
-    vertical-align:middle; margin-right:5px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 
 <div id="sidebar">
-  <h2>🥖 Prodavnice hrane – Boka i Primorje</h2>
+  <h2>🛒 Široka pretraga prodavnica</h2>
   <p class="note">
-    Prikazuju se <b>samo prodavnice hrane</b> (convenience, supermarket, grocery,
-    mesara, pekara, ribarnica, delikates…). Ostale prodavnice su izbačene.
+    Traži <b>sve</b> što liči na prodavnicu: po <code>shop=*</code>, <code>amenity=*</code>,
+    i po <b>imenu</b> (market, prodavnica, dućan, radnja, minimarket, piljara…).
+    Pokriva celu Boku + Budvu + Bar.
   </p>
-
-  <div class="filter-box">
-    <h4>Prikaži na mapi</h4>
-
-    <label class="filter-item">
-      <span class="switch">
-        <input type="checkbox" id="fVelike">
-        <span class="slider"></span>
-      </span>
-      <span class="name">🏪 Veće samoposluge</span>
-      <span class="count" id="cVelike">0</span>
-    </label>
-
-    <label class="filter-item">
-      <span class="switch">
-        <input type="checkbox" id="fPekare">
-        <span class="slider"></span>
-      </span>
-      <span class="name">🥖 Pekare</span>
-      <span class="count" id="cPekare">0</span>
-    </label>
-
-    <label class="filter-item">
-      <span class="switch">
-        <input type="checkbox" id="fBezImena">
-        <span class="slider"></span>
-      </span>
-      <span class="name">❓ Bez naziva</span>
-      <span class="count" id="cBezImena">0</span>
-    </label>
-  </div>
-
-  <input type="text" id="custom" placeholder="Dodatna reč u imenu (opciono)">
+  <input type="text" id="custom" placeholder="Dodatna reč u imenu (npr. Slavica)">
   <button id="btnLoad">Učitaj iz OSM</button>
   <button id="btnCSV" class="sec">Preuzmi kao CSV</button>
-  <div id="stats">Klikni „Učitaj iz OSM".</div>
+  <div id="stats">Klikni „Učitaj".</div>
   <div id="lista"></div>
 </div>
 
 <div id="map"></div>
-
-<div id="legend">
-  <div class="row"><span class="dot" style="background:#e74c3c"></span> supermarket</div>
-  <div class="row"><span class="dot" style="background:#3498db"></span> convenience</div>
-  <div class="row"><span class="dot" style="background:#27ae60"></span> grocery</div>
-  <div class="row"><span class="dot" style="background:#16a085"></span> voće / povrće</div>
-  <div class="row"><span class="dot" style="background:#c0392b"></span> mesara</div>
-  <div class="row"><span class="dot" style="background:#9b59b6"></span> pekara</div>
-  <div class="row"><span class="dot" style="background:#d35400"></span> delikates</div>
-</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -194,296 +67,137 @@ const cluster = L.markerClusterGroup({ maxClusterRadius: 40 }).addTo(map);
 
 const BBOX = "41.95,18.45,42.70,19.40";
 let sviPodaci = [];
-let markeriMap = new Map();
 
-// ---------- SAMO PRODAVNICE HRANE ----------
-// Ovo su sve OSM kategorije koje prodaju hranu
-const HRANA_SHOPOVI = [
-  'convenience',    // mala prodavnica mješovite robe (najčešće u CG)
-  'supermarket',    // veliki market
-  'grocery',        // prodavnica prehrambenih proizvoda
-  'general',        // seoska prodavnica opšte robe (prodaje i hranu)
-  'greengrocer',    // voće i povrće
-  'butcher',        // mesara
-  'deli',           // delikates / suhomesnato
-  'seafood',        // ribarnica
-  'cheese',         // sirnica
-  'bakery',         // pekara
-  'pastry',         // poslastičarnica / pecivo
-  'confectionery',  // slatkiši / konditorska
-  'frozen_food',    // zamrznuta hrana
-  'health_food',    // zdrava hrana
-  'farm',           // domaći proizvodi
-  'coffee',         // kafa (prodavnica)
-  'tea',            // čaj
-  'spices',         // začini
-  'nuts',           // orasi / sušeno voće
-  'chocolate'       // čokoladnica
-].join('|');
-
-// ---------- DETEKCIJA VELIKIH LANACA ----------
-const VELIKI_LANCI = [
-  'voli', 'idea', 'franca', 'aroma', 'roda', 'mercator',
-  'univerexport', 'dis', 'megamarket', 'mega market', 'mega-market',
-  'supermarket', 'maxi', 'lidl', 'kaufland'
-];
-
-const PEKARA_RECI = ['pekara', 'pekare', 'pekarnica', 'bakery', 'pekarica'];
-
-function jeVelikaSamoposluga(p) {
-  const naziv = (p.naziv || '').toLowerCase();
-  if (VELIKI_LANCI.some(l => naziv.includes(l))) return true;
-  if (p.shop === 'supermarket') return true;
-  return false;
-}
-function jePekara(p) {
-  const naziv = (p.naziv || '').toLowerCase();
-  if (PEKARA_RECI.some(r => naziv.includes(r))) return true;
-  if (p.shop === 'bakery' || p.shop === 'pastry') return true;
-  return false;
-}
-function jeBezImena(p) {
-  return !p.naziv || p.naziv === '(bez naziva)';
-}
-function jeProdavnicaHrane(p) {
-  return HRANA_SHOPOVI.split('|').includes(p.shop);
-}
-
-// ---------- UČITAVANJE ----------
 async function ucitaj() {
   const stats = document.getElementById('stats');
-  const btn = document.getElementById('btnLoad');
-  btn.disabled = true;
-  stats.className = '';
-  stats.innerHTML = '<span class="spinner"></span> Pripremam upit...';
+  stats.innerHTML = '⏳ Povlačim iz OSM-a... (može 20–40 s)';
 
   const custom = document.getElementById('custom').value.trim();
+  const customFilter = custom ? `["name"~"${custom}",i]` : '';
 
-  const parts = [
-    `node["shop"~"^(${HRANA_SHOPOVI})$"](${BBOX});`,
-    `way["shop"~"^(${HRANA_SHOPOVI})$"](${BBOX});`
-  ];
+  // Široka pretraga: shop, amenity, i po imenu
+  const query = `
+    [out:json][timeout:120];
+    (
+      node["shop"](${BBOX});
+      way["shop"](${BBOX});
+      node["amenity"~"^(convenience|marketplace)$"](${BBOX});
+      way["amenity"~"^(convenience|marketplace)$"](${BBOX});
+      node["name"~"prodavnica|market|minimarket|dućan|ducan|radnja|piljara|Slavica|mesara|pekara|bakery",i](${BBOX});
+      way["name"~"prodavnica|market|minimarket|dućan|ducan|radnja|piljara|Slavica|mesara|pekara|bakery",i](${BBOX});
+      node${customFilter}(${BBOX});
+      way${customFilter}(${BBOX});
+    );
+    out center tags;
+  `;
 
-  if (custom.length > 0) {
-    const safe = custom.replace(/[.*+?^${}()|[\]\\"]/g, '');
-    if (safe.length > 0) {
-      parts.push(`node["name"~"${safe}",i](${BBOX});`);
-      parts.push(`way["name"~"${safe}",i](${BBOX});`);
-    }
-  }
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
 
-  const query = `[out:json][timeout:180];(${parts.join('')});out center tags;`;
+    // Deduplikacija po OSM id-u
+    const seen = new Set();
+    sviPodaci = [];
+    data.elements.forEach(el => {
+      const lat = el.lat ?? el.center?.lat;
+      const lon = el.lon ?? el.center?.lon;
+      if (!lat || !lon) return;
+      const key = el.type + '/' + el.id;
+      if (seen.has(key)) return;
+      seen.add(key);
 
-  const servers = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://overpass.private.coffee/api/interpreter'
-  ];
-
-  let data = null;
-  let lastErr = null;
-
-  for (let i = 0; i < servers.length; i++) {
-    const url = servers[i];
-    const host = new URL(url).hostname;
-    stats.innerHTML = `<span class="spinner"></span> Server ${i+1}/${servers.length}: <b>${host}</b>`;
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'data=' + encodeURIComponent(query)
+      sviPodaci.push({
+        id: el.id,
+        osmType: el.type,
+        naziv: el.tags?.name || '(bez naziva)',
+        shop: el.tags?.shop || '',
+        amenity: el.tags?.amenity || '',
+        ulica: [el.tags?.['addr:street'], el.tags?.['addr:housenumber']].filter(Boolean).join(' '),
+        mesto: el.tags?.['addr:city'] || el.tags?.['addr:place'] || '',
+        tel: el.tags?.phone || '',
+        lat, lon,
+        osmLink: `https://www.openstreetmap.org/${el.type}/${el.id}`
       });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const json = await res.json();
-      if (!json.elements) throw new Error('Odgovor bez elemenata');
-      data = json;
-      break;
-    } catch (e) {
-      lastErr = e;
-      console.warn('Server pao:', host, e.message);
-    }
+    });
+
+    prikazi();
+  } catch (err) {
+    stats.innerHTML = '❌ Greška: ' + err.message + '<br>Pokušaj ponovo — Overpass je često zauzet.';
   }
-
-  if (!data) {
-    stats.className = 'err';
-    stats.innerHTML = `❌ <b>Svi serveri nedostupni.</b><br>
-      Greška: ${lastErr?.message || '?'}<br><br>
-      Sačekaj 1–2 min pa probaj ponovo.`;
-    btn.disabled = false;
-    return;
-  }
-
-  const elements = data.elements || [];
-  stats.innerHTML = `<span class="spinner"></span> Obrađujem ${elements.length} elemenata...`;
-
-  const seen = new Set();
-  sviPodaci = [];
-  elements.forEach(el => {
-    const lat = el.lat ?? el.center?.lat;
-    const lon = el.lon ?? el.center?.lon;
-    if (!lat || !lon) return;
-    const key = el.type + '/' + el.id;
-    if (seen.has(key)) return;
-    seen.add(key);
-
-    const p = {
-      id: el.id,
-      osmType: el.type,
-      naziv: el.tags?.name || '(bez naziva)',
-      shop: el.tags?.shop || '',
-      amenity: el.tags?.amenity || '',
-      ulica: [el.tags?.['addr:street'], el.tags?.['addr:housenumber']].filter(Boolean).join(' '),
-      mesto: el.tags?.['addr:city'] || el.tags?.['addr:place'] || '',
-      tel: el.tags?.phone || '',
-      lat, lon,
-      osmLink: `https://www.openstreetmap.org/${el.type}/${el.id}`
-    };
-
-    // FIX: Zadrži samo ako je prodavnica hrane
-    if (!jeProdavnicaHrane(p)) return;
-
-    p.velika   = jeVelikaSamoposluga(p);
-    p.pekara   = jePekara(p);
-    p.bezImena = jeBezImena(p);
-    sviPodaci.push(p);
-  });
-
-  if (sviPodaci.length === 0) {
-    stats.className = 'warn';
-    stats.innerHTML = '⚠️ <b>Nema prodavnica hrane u ovoj oblasti.</b><br>Server je odgovorio, ali baza je prazna za ovaj region.';
-    btn.disabled = false;
-    return;
-  }
-
-  document.getElementById('cVelike').textContent   = sviPodaci.filter(p => p.velika).length;
-  document.getElementById('cPekare').textContent   = sviPodaci.filter(p => p.pekara).length;
-  document.getElementById('cBezImena').textContent = sviPodaci.filter(p => p.bezImena).length;
-
-  izgradiMarkere();
-  primeniFilter();
-
-  btn.disabled = false;
 }
 
-// ---------- MARKERI ----------
-function izgradiMarkere() {
-  markeriMap.clear();
+function prikazi() {
+  cluster.clearLayers();
+  const lista = document.getElementById('lista');
+  lista.innerHTML = '';
+
   const boje = {
-    supermarket:   '#e74c3c',
-    convenience:   '#3498db',
-    grocery:       '#27ae60',
-    general:       '#f39c12',
-    greengrocer:   '#16a085',
-    butcher:       '#c0392b',
-    deli:          '#d35400',
-    seafood:       '#00838f',
-    cheese:        '#fdd835',
-    bakery:        '#9b59b6',
-    pastry:        '#8e44ad',
-    confectionery: '#e91e63',
-    frozen_food:   '#00acc1',
-    health_food:   '#7cb342',
-    farm:          '#6d4c41',
-    coffee:        '#5d4037',
-    tea:           '#4caf50',
-    spices:        '#ff6f00',
-    nuts:          '#795548',
-    chocolate:     '#6d4c41',
-    default:       '#555'
+    supermarket:'#e74c3c', convenience:'#3498db', grocery:'#27ae60',
+    general:'#f39c12', bakery:'#9b59b6', greengrocer:'#16a085',
+    butcher:'#c0392b', kiosk:'#7f8c8d', deli:'#d35400',
+    marketplace:'#00897b', _named:'#ec407a', default:'#555'
   };
 
   sviPodaci.forEach(p => {
-    const boja = boje[p.shop] || boje.default;
+    let tip = p.shop || p.amenity || (p.naziv !== '(bez naziva)' ? '_named' : 'default');
+    const boja = boje[tip] || boje.default;
+
     const icon = L.divIcon({
       className: '',
-      html: `<div style="background:${boja};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.6);"></div>`,
-      iconSize: [16,16], iconAnchor: [8,8]
+      html: `<div style="background:${boja};width:11px;height:11px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.6);"></div>`,
+      iconSize: [15,15], iconAnchor: [7.5,7.5]
     });
 
-    const marker = L.marker([p.lat, p.lon], { icon })
+    L.marker([p.lat, p.lon], { icon })
       .bindPopup(`
-        ${p.velika ? '<div class="veliki-badge badge-velika">VELIKA SAMOPOSLUGA</div><br>' : ''}
-        ${p.pekara ? '<div class="veliki-badge badge-pekara">PEKARA</div><br>' : ''}
         <b>${p.naziv}</b><br>
         ${p.shop ? '<span class="tagbadge">shop=' + p.shop + '</span>' : ''}
+        ${p.amenity ? '<span class="tagbadge">amenity=' + p.amenity + '</span>' : ''}
         <br>
         ${p.ulica ? '<b>Adresa:</b> ' + p.ulica + '<br>' : ''}
         ${p.mesto ? '<b>Mesto:</b> ' + p.mesto + '<br>' : ''}
         <a href="${p.osmLink}" target="_blank">OSM</a> ·
         <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank">Google Maps</a>
-      `);
-
-    marker._data = p;
-    markeriMap.set(p.id, marker);
-  });
-}
-
-// ---------- FILTER (sada on/off) ----------
-function prosaoFilter(p) {
-  // Ako prekidač NIJE čekiran, sakrij tu grupu
-  if (!document.getElementById('fVelike').checked && p.velika) return false;
-  if (!document.getElementById('fPekare').checked && p.pekara) return false;
-  if (!document.getElementById('fBezImena').checked && p.bezImena) return false;
-  return true;
-}
-
-function primeniFilter() {
-  cluster.clearLayers();
-  const lista = document.getElementById('lista');
-  lista.innerHTML = '';
-
-  let prikazano = 0, skriveno = 0;
-  const vidljivi = [];
-
-  sviPodaci.forEach(p => {
-    if (!prosaoFilter(p)) { skriveno++; return; }
-    prikazano++;
-    vidljivi.push(p);
-    cluster.addLayer(markeriMap.get(p.id));
+      `)
+      .addTo(cluster);
 
     const div = document.createElement('div');
     div.className = 'item';
-    const badges = [];
-    if (p.velika) badges.push('<span class="tagbadge" style="background:#c0392b;color:#fff">VELIKA</span>');
-    if (p.pekara) badges.push('<span class="tagbadge" style="background:#9b59b6;color:#fff">PEKARA</span>');
-    div.innerHTML = `<div class="naziv">${badges.join('')}${p.naziv}</div>
-                     <div class="meta">${p.shop}${p.mesto ? ' · ' + p.mesto : ''}</div>`;
+    div.innerHTML = `<div class="naziv">${p.naziv}</div>
+                     <div class="meta">${p.shop || p.amenity || '—'}${p.mesto ? ' · ' + p.mesto : ''}</div>`;
     div.onclick = () => map.setView([p.lat, p.lon], 17);
     lista.appendChild(div);
   });
 
-  const stats = document.getElementById('stats');
-  stats.className = 'ok';
-  stats.innerHTML = `✅ Prikazano: <b>${prikazano}</b> / ${sviPodaci.length}<br>
-                     Skriveno prekidačima: <b>${skriveno}</b>`;
+  document.getElementById('stats').innerHTML =
+    `✅ <b>${sviPodaci.length}</b> objekata pronađeno.<br>
+     Uključeni su i oni bez <code>shop</code> taga ako im ime sadrži ključne reči.`;
 
-  if (vidljivi.length > 0) {
-    const b = L.latLngBounds(vidljivi.map(p => [p.lat, p.lon]));
+  if (sviPodaci.length) {
+    const b = L.latLngBounds(sviPodaci.map(p => [p.lat, p.lon]));
     map.fitBounds(b.pad(0.1));
   }
 }
 
-// ---------- EVENT LISTENERI ----------
-document.getElementById('fVelike').onchange   = primeniFilter;
-document.getElementById('fPekare').onchange   = primeniFilter;
-document.getElementById('fBezImena').onchange = primeniFilter;
-document.getElementById('btnLoad').onclick    = ucitaj;
-
+document.getElementById('btnLoad').onclick = ucitaj;
 document.getElementById('btnCSV').onclick = () => {
   if (!sviPodaci.length) return alert('Prvo učitaj.');
-  const vidljivi = sviPodaci.filter(prosaoFilter);
-  if (!vidljivi.length) return alert('Nema vidljivih objekata.');
-  const h = 'Naziv,Shop,Ulica,Mesto,Telefon,Lat,Lon,Velika,Pekara,BezImena,OSM\n';
-  const r = vidljivi.map(p =>
-    `"${p.naziv}","${p.shop}","${p.ulica}","${p.mesto}","${p.tel}",${p.lat},${p.lon},${p.velika},${p.pekara},${p.bezImena},"${p.osmLink}"`
+  const h = 'Naziv,Shop,Amenity,Ulica,Mesto,Telefon,Lat,Lon,OSM\n';
+  const r = sviPodaci.map(p =>
+    `"${p.naziv}","${p.shop}","${p.amenity}","${p.ulica}","${p.mesto}","${p.tel}",${p.lat},${p.lon},${p.osmLink}`
   ).join('\n');
   const blob = new Blob([h+r], { type:'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'prodavnice_hrane.csv';
+  a.download = 'prodavnice_osm.csv';
   a.click();
 };
+
+ucitaj();
 </script>
 </body>
 </html>
