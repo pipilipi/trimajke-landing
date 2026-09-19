@@ -2,463 +2,200 @@
 <html lang="sr">
 <head>
 <meta charset="UTF-8">
-<title>Ruta obilaska – Boka i Primorje</title>
+<title>Stvarne prodavnice – Boka i Primorje (OSM)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <style>
-  * { box-sizing: border-box; }
   html, body { margin:0; height:100%; font-family: 'Segoe UI', sans-serif; }
-  #map { position:absolute; top:0; bottom:0; left:340px; right:0; }
+  #map { position:absolute; top:0; bottom:0; left:360px; right:0; }
   #sidebar {
-    position:absolute; top:0; bottom:0; left:0; width:340px;
-    background:#1e2a38; color:#eee; overflow-y:auto; padding:15px;
-    z-index:1000; box-shadow: 2px 0 8px rgba(0,0,0,0.3);
+    position:absolute; top:0; bottom:0; left:0; width:360px;
+    background:#1e2a38; color:#eee; overflow-y:auto; padding:15px; z-index:1000;
   }
-  h2 { margin:0 0 10px; font-size:16px; color:#4fc3f7; }
-  h3 { margin:15px 0 6px; font-size:12px; color:#90caf9; text-transform:uppercase; letter-spacing:1px;}
+  h2 { margin:0 0 8px; font-size:16px; color:#4fc3f7; }
+  p.note { font-size:12px; color:#90a4ae; line-height:1.5; margin:0 0 12px; }
   button {
-    width:100%; padding:9px; margin-bottom:8px; border:none; border-radius:5px;
-    background:#0288d1; color:#fff; font-size:13px; font-weight:600; cursor:pointer;
+    width:100%; padding:10px; margin-bottom:6px; border:none; border-radius:5px;
+    background:#0288d1; color:#fff; font-weight:600; cursor:pointer; font-size:13px;
   }
   button:hover { background:#039be5; }
-  button.alt { background:#455a64; }
-  button.alt:hover { background:#546e7a; }
-  #stats { font-size:12px; color:#90a4ae; margin:8px 0; padding:8px; background:#263238; border-radius:5px; line-height:1.5;}
+  button.secondary { background:#455a64; }
+  #stats {
+    background:#263238; padding:10px; border-radius:5px; font-size:12px;
+    color:#b0bec5; line-height:1.6; margin:10px 0;
+  }
   #stats b { color:#4fc3f7; }
-  #routeList { font-size:12px; }
-  .route-item {
-    display:flex; align-items:center; gap:6px; padding:5px 6px;
-    border-bottom:1px solid #263238; cursor:pointer;
+  #lista { font-size:12px; }
+  .item {
+    padding:6px; border-bottom:1px solid #263238; cursor:pointer;
   }
-  .route-item:hover { background:#263238; }
-  .route-item.start { background:#1b5e20; font-weight:600; }
-  .route-item .num {
-    background:#4fc3f7; color:#1e2a38; border-radius:50%;
-    min-width:22px; height:22px; display:flex; align-items:center; justify-content:center;
-    font-weight:bold; font-size:11px; flex-shrink:0;
-  }
-  .route-item .name { flex:1; }
+  .item:hover { background:#263238; }
+  .item .naziv { color:#fff; font-weight:600; }
+  .item .meta { color:#90a4ae; font-size:11px; }
   .leaflet-popup-content { font-size:13px; }
   .leaflet-popup-content b { color:#01579b; }
-  #loading {
-    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-    background:rgba(0,0,0,0.85); color:#fff; padding:20px 30px;
-    border-radius:8px; z-index:2000; font-size:14px; display:none;
-  }
 </style>
 </head>
 <body>
 
 <div id="sidebar">
-  <h2>🚚 Ruta obilaska objekata</h2>
-  <button id="btnRoute">Izračunaj rutu preko puteva</button>
-  <button id="btnLine" class="alt">Prikaži kao prave linije</button>
-  <button id="btnClear" class="alt">Očisti rutu</button>
-  <button id="btnGmaps" class="alt">Kopiraj link za Google Maps</button>
-  <div id="stats">Ruta nije izračunata.</div>
-  <h3>Redosled obilaska</h3>
-  <div id="routeList"></div>
+  <h2>🛒 Stvarne prodavnice (OSM)</h2>
+  <p class="note">
+    Podaci se povlače <b>direktno iz OpenStreetMap</b> — baza koju su mapirali ljudi na terenu.
+    Ovo su <b>stvarne</b> lokacije, ne aproksimacije.
+  </p>
+  <button id="btnLoad">Učitaj prodavnice iz OSM</button>
+  <button id="btnCSV" class="secondary">Preuzmi kao CSV</button>
+  <div id="stats">Klikni „Učitaj" da povučeš podatke.</div>
+  <div id="lista"></div>
 </div>
 
 <div id="map"></div>
-<div id="loading">Računam rutu... može potrajati 10–30 sekundi.</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-// ---------- PODACI (isto kao pre) ----------
-const objekti = [
-[1,"Minimarket Kumbor","Herceg Novi","Kumbor - Kamenari",42.4461,18.5772],
-[2,"Lokalna radnja Đenovići","Herceg Novi","Kumbor - Kamenari",42.4419,18.5678],
-[3,"Minimarket Baošići","Herceg Novi","Kumbor - Kamenari",42.4385,18.5562],
-[4,"Seoska prodavnica Bijela 1","Herceg Novi","Kumbor - Kamenari",42.4489,18.6321],
-[5,"Seoska prodavnica Bijela 2","Herceg Novi","Kumbor - Kamenari",42.4502,18.6354],
-[6,"Lokalni minimarket Kamenari","Herceg Novi","Kumbor - Kamenari",42.4551,18.6659],
-[7,"Minimarket Donja Lastva","Tivat","Tivat i Luštica",42.4352,18.6941],
-[8,"Manja piljara Tivat centar","Tivat","Tivat i Luštica",42.4278,18.6934],
-[9,"Lokalna radnja Radovići (Luštica)","Tivat","Tivat i Luštica",42.3912,18.6734],
-[10,"Seoski dućan Gradšnica","Tivat","Tivat i Luštica",42.4095,18.7051],
-[11,"Seoski dućan Lepetani","Tivat","Tivat i Luštica",42.4573,18.6812],
-[12,"Kvartovska radnja Donji put Dobrota 1","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.4334,18.7561],
-[13,"Kvartovska radnja Donji put Dobrota 2","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.4412,18.7612],
-[14,"Kvartovska radnja Gornji put Dobrota 1","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.4355,18.7592],
-[15,"Kvartovska radnja Gornji put Dobrota 2","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.4431,18.7634],
-[16,"Porodični minimarket Prčanj 1","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.4465,18.7321],
-[17,"Porodični minimarket Prčanj 2","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.4512,18.7254],
-[18,"Seoska radnja Stoliv","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.4632,18.6987],
-[19,"Minimarket Slavica (Lastva Grbaljska)","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.3112,18.7654],
-[20,"Seoska prodavnica Radanovići","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.3384,18.7752],
-[21,"Manja radnja Pobrđe","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.3521,18.7512],
-[22,"Manja radnja Sutvara","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.3481,18.7845],
-[23,"Lokalni minimarket Bigova","Kotor","Dobrota, Prčanj, Stoliv, Grbalj",42.3421,18.6754],
-[24,"Kvartovski minimarket Dubovica 1","Budva","Budva i rivijera",42.2923,18.8456],
-[25,"Kvartovski minimarket Dubovica 2","Budva","Budva i rivijera",42.2935,18.8471],
-[26,"Porodična radnja Lazi","Budva","Budva i rivijera",42.2984,18.8512],
-[27,"Minimarket Velji Vinogradi 1","Budva","Budva i rivijera",42.2851,18.8423],
-[28,"Minimarket Velji Vinogradi 2","Budva","Budva i rivijera",42.2862,18.8439],
-[29,"Lokalni dućan Rozino 1","Budva","Budva i rivijera",42.2891,18.8412],
-[30,"Lokalni dućan Rozino 2","Budva","Budva i rivijera",42.2902,18.8421],
-[31,"Seoska radnja Mainae","Budva","Budva i rivijera",42.3021,18.8598],
-[32,"Seoska radnja Pobori","Budva","Budva i rivijera",42.3112,18.8712],
-[33,"Manja radnja Petrovac centar","Budva","Budva i rivijera",42.2045,18.9482],
-[34,"Manja radnja Petrovac zaleđe","Budva","Budva i rivijera",42.2112,18.9412],
-[35,"Minimarket Sveti Stefan","Budva","Budva i rivijera",42.2541,18.8923],
-[36,"Minimarket Pržno","Budva","Budva i rivijera",42.2612,18.8821],
-[37,"Kvartovska radnja Sutomore magistrala","Bar","Bar i okolina",42.1412,19.0431],
-[38,"Kvartovska radnja Sutomore obala","Bar","Bar i okolina",42.1384,19.0475],
-[39,"Minimarket Čanj 1","Bar","Bar i okolina",42.1623,19.0012],
-[40,"Minimarket Čanj 2","Bar","Bar i okolina",42.1645,19.0034],
-[41,"Lokalni dućan Bjeliši 1","Bar","Bar i okolina",42.1023,19.1021],
-[42,"Lokalni dućan Bjeliši 2","Bar","Bar i okolina",42.1041,19.1045],
-[43,"Kvartovska radnja Bar centar 1","Bar","Bar i okolina",42.0931,19.0984],
-[44,"Kvartovska radnja Bar centar 2","Bar","Bar i okolina",42.0945,19.1012],
-[45,"Manji dućan Šušanj 1","Bar","Bar i okolina",42.1123,19.0851],
-[46,"Manji dućan Šušanj 2","Bar","Bar i okolina",42.1151,19.0884],
-[47,"Seoska radnja Virpazar","Bar","Bar i okolina",42.2478,19.0881],
-[48,"Seoska radnja Crmnica","Bar","Bar i okolina",42.2351,19.0745],
-[49,"Kvartovski minimarket Igalo centar","Herceg Novi","Uži grad i Igalo",42.4531,18.5178],
-[50,"Lokalna radnja Topla 1","Herceg Novi","Uži grad i Igalo",42.4512,18.5342],
-[51,"Lokalna radnja Topla 2","Herceg Novi","Uži grad i Igalo",42.4525,18.5381],
-[52,"Porodični dućan Savina","Herceg Novi","Uži grad i Igalo",42.4501,18.5521],
-[53,"Minimarket Meljine","Herceg Novi","Uži grad i Igalo",42.4468,18.5612],
-[54,"Seoska prodavnica Podi","Herceg Novi","Uži grad i Igalo",42.4712,18.5284],
-[55,"Seoska prodavnica Trebesin","Herceg Novi","Uži grad i Igalo",42.4821,18.5112],
-[56,"Minimarket Seljanovo 1","Tivat","Tivat - Naselja",42.4384,18.6912],
-[57,"Minimarket Seljanovo 2","Tivat","Tivat - Naselja",42.4412,18.6934],
-[58,"Lokalna radnja Kalimanj","Tivat","Tivat - Naselja",42.4331,18.6978],
-[59,"Manji dućan Marići","Tivat","Tivat - Naselja",42.4184,18.7123],
-[60,"Seoska radnja Đurđevići (Luštica)","Tivat","Tivat - Naselja",42.3851,18.6541],
-[61,"Lokalni minimarket Krašići","Tivat","Tivat - Naselja",42.4172,18.6654],
-[62,"Kvartovska radnja Škaljari centar 1","Kotor","Kotor - Škaljari i Muo",42.4184,18.7612],
-[63,"Kvartovska radnja Škaljari centar 2","Kotor","Kotor - Škaljari i Muo",42.4195,18.7634],
-[64,"Manji dućan Muo 1","Kotor","Kotor - Škaljari i Muo",42.4251,18.7412],
-[65,"Manji dućan Muo 2","Kotor","Kotor - Škaljari i Muo",42.4284,18.7351],
-[66,"Mini-market Stari grad Kotor","Kotor","Kotor - Škaljari i Muo",42.4247,18.7732],
-[67,"Seoska prodavnica Kavač","Kotor","Kotor - Škaljari i Muo",42.3951,18.7451],
-[68,"Lokalna radnja Dobrota (kod bolnice)","Kotor","Kotor - Škaljari i Muo",42.4381,18.7612],
-[69,"Minimarket Stari grad Budva","Budva","Budva - Stari grad i zaleđe",42.2764,18.8392],
-[70,"Kvartovska radnja Bečići 1","Budva","Budva - Stari grad i zaleđe",42.2821,18.8712],
-[71,"Kvartovska radnja Bečići 2","Budva","Budva - Stari grad i zaleđe",42.2834,18.8745],
-[72,"Manji dućan Rafailovići","Budva","Budva - Stari grad i zaleđe",42.2784,18.8851],
-[73,"Lokalna radnja Sveti Stefan (zaleđe)","Budva","Budva - Stari grad i zaleđe",42.2612,18.8951],
-[74,"Seoska radnja Buljarica","Budva","Budva - Stari grad i zaleđe",42.1951,18.9612],
-[75,"Minimarket Kuljače","Budva","Budva - Stari grad i zaleđe",42.2412,18.8951],
-[76,"Manji dućan Reževići","Budva","Budva - Stari grad i zaleđe",42.2251,18.9212],
-[77,"Kvartovska radnja Bar Polje 1","Bar","Bar - Polje i južni dio",42.0851,19.1112],
-[78,"Kvartovska radnja Bar Polje 2","Bar","Bar - Polje i južni dio",42.0874,19.1145],
-[79,"Minimarket Bjeliši (gornji dio)","Bar","Bar - Polje i južni dio",42.1084,19.1092],
-[80,"Lokalni dućan Ilino","Bar","Bar - Polje i južni dio",42.1151,19.0921],
-[81,"Manji dućan Zeleni Pojas","Bar","Bar - Polje i južni dio",42.1212,19.0784],
-[82,"Kvartovska radnja Dobra Voda 1","Bar","Bar - Polje i južni dio",42.0312,19.1512],
-[83,"Kvartovska radnja Dobra Voda 2","Bar","Bar - Polje i južni dio",42.0345,19.1545],
-[84,"Minimarket Utjeha 1","Bar","Bar - Polje i južni dio",41.9951,19.1812],
-[85,"Minimarket Utjeha 2","Bar","Bar - Polje i južni dio",41.9984,19.1845],
-[86,"Seoska radnja Veliki Pijesak","Bar","Bar - Polje i južni dio",42.0151,19.1651],
-[87,"Lokalni dućan Bartula","Bar","Bar - Polje i južni dio",42.0812,19.1251],
-[88,"Seoska radnja Sustas","Bar","Bar - Polje i južni dio",42.0912,19.1351],
-[89,"Manja radnja Veliki Mikulići","Bar","Bar - Polje i južni dio",42.0951,19.1851],
-[90,"Seoska prodavnica Zupci","Bar","Bar - Polje i južni dio",42.0712,19.1351],
-[91,"Minimarket Sutorina","Herceg Novi","Herceg Novi - Zaleđe",42.4684,18.5012],
-[92,"Kvartovska radnja Igalo (iznad magistrale)","Herceg Novi","Herceg Novi - Zaleđe",42.4584,18.5212],
-[93,"Seoska prodavnica Mokrine","Herceg Novi","Herceg Novi - Zaleđe",42.5112,18.5012],
-[94,"Seoska radnja Kruševice","Herceg Novi","Herceg Novi - Zaleđe",42.5284,18.5412],
-[95,"Lokalni dućan Žlijebi","Herceg Novi","Herceg Novi - Zaleđe",42.4851,18.5612],
-[96,"Minimarket Prijevor","Herceg Novi","Herceg Novi - Zaleđe",42.4512,18.4912],
-[97,"Kvartovska radnja Mrčevac","Tivat","Tivat - Zaleđe",42.4151,18.7112],
-[98,"Manji dućan Dumidran","Tivat","Tivat - Zaleđe",42.4084,18.7051],
-[99,"Seoska radnja Bogišići (Luštica)","Tivat","Tivat - Zaleđe",42.3984,18.6651],
-[100,"Lokalni minimarket Radovići (centar)","Tivat","Tivat - Zaleđe",42.3921,18.6741],
-[101,"Seoski dućan Gošići","Tivat","Tivat - Zaleđe",42.3851,18.6851],
-[102,"Seoska radnja Mirac","Kotor","Kotor - Zaleđe",42.3951,18.7951],
-[103,"Lokalni minimarket Trojica","Kotor","Kotor - Zaleđe",42.4112,18.7751],
-[104,"Kvartovska radnja Škaljari (gornji put)","Kotor","Kotor - Zaleđe",42.4151,18.7651],
-[105,"Seoska prodavnica Ledenice","Kotor","Kotor - Zaleđe",42.5351,18.7151],
-[106,"Manji dućan Grahovo (put prema Nikšiću/Boki)","Kotor","Kotor - Zaleđe",42.6512,18.6912],
-[107,"Seoska radnja Zagora (Grbalj)","Kotor","Kotor - Zaleđe",42.3351,18.7251],
-[108,"Lokalni minimarket Nalježići (Grbalj)","Kotor","Kotor - Zaleđe",42.3551,18.7451],
-[109,"Manja radnja Pelinovo (Grbalj)","Kotor","Kotor - Zaleđe",42.3451,18.7651],
-[110,"Seoska radnja Brajići","Budva","Budva - Zaleđe",42.3284,18.8951],
-[111,"Lokalni dućan Lapčići","Budva","Budva - Zaleđe",42.3184,18.8851],
-[112,"Kvartovska radnja Prijevor (Budva)","Budva","Budva - Zaleđe",42.3012,18.8151],
-[113,"Manji dućan Pobori (gornji dio)","Budva","Budva - Zaleđe",42.3151,18.8812],
-[114,"Seoska radnja Maine (zaleđe)","Budva","Budva - Zaleđe",42.3084,18.8651],
-[115,"Minimarket Podmaine","Budva","Budva - Zaleđe",42.3012,18.8551],
-[116,"Seoska radnja Pečurice","Bar","Bar - Zaleđe i Krajina",42.0451,19.1851],
-[117,"Kvartovska radnja Kunje","Bar","Bar - Zaleđe i Krajina",42.0251,19.1651],
-[118,"Manji dućan Gorana","Bar","Bar - Zaleđe i Krajina",42.0151,19.2151],
-[119,"Seoska prodavnica Limljani (Crmnica)","Bar","Bar - Zaleđe i Krajina",42.2551,19.0451],
-[120,"Lokalni minimarket Boljevići","Bar","Bar - Zaleđe i Krajina",42.2351,19.0951],
-[121,"Seoska radnja Seoca","Bar","Bar - Zaleđe i Krajina",42.2251,19.1151],
-[122,"Manji dućan Gluhi Do","Bar","Bar - Zaleđe i Krajina",42.2151,19.0551],
-[123,"Kvartovska radnja Sutomore (Spičansko polje)","Bar","Bar - Zaleđe i Krajina",42.1451,19.0551],
-[124,"Minimarket Zagrađe","Bar","Bar - Zaleđe i Krajina",42.1351,19.0651],
-[125,"Lokalni dućan Brca","Bar","Bar - Zaleđe i Krajina",42.1251,19.0751],
-[126,"Kvartovski minimarket Zelenika obala","Herceg Novi","Zelenika i okolina",42.4412,18.5851],
-[127,"Lokalna radnja Zelenika magistrala","Herceg Novi","Zelenika i okolina",42.4445,18.5881],
-[128,"Porodični dućan Sasovići","Herceg Novi","Zelenika i okolina",42.4612,18.5751],
-[129,"Seoska prodavnica Mojdež","Herceg Novi","Zelenika i okolina",42.4812,18.5351],
-[130,"Manji dućan Kakrc","Tivat","Tivat - Ostalo",42.4284,18.6612],
-[131,"Seoski dućan Đuraševići","Tivat","Tivat - Ostalo",42.4012,18.6812],
-[132,"Seoska radnja Bratešići","Kotor","Kotor - Ostalo",42.3812,18.7812],
-[133,"Lokalni minimarket Krtoli","Kotor","Kotor - Ostalo",42.3912,18.6712],
-[134,"Seoska radnja Ostros","Bar","Bar - Krajina",42.0712,19.3451],
-[135,"Kvartovska radnja Vladimir","Bar","Bar - Krajina",41.9712,19.2951],
-[136,"Manji dućan Veliki Ostros","Bar","Bar - Krajina",42.0812,19.3551],
-[137,"Seoska prodavnica Bobovište","Bar","Bar - Krajina",42.0612,19.3351],
-[138,"Seoska radnica Rose","Herceg Novi","Luštica i uvale",42.4012,18.5912],
-[139,"Lokalni minimarket Mendegija","Herceg Novi","Luštica i uvale",42.3851,18.6112],
-[140,"Seoska radnja Gorovići","Kotor","Grbalj - Zaleđe",42.3651,18.7512],
-[141,"Manji dućan Višnjevo","Kotor","Grbalj - Zaleđe",42.3551,18.7212],
-[142,"Seoska radnja Krapina","Budva","Budva - Brdska sela",42.3251,18.8251],
-[143,"Lokalni dućan Pobori (donji dio)","Budva","Budva - Brdska sela",42.3112,18.8651],
-[144,"Seoska prodavnica Donji Zupci","Bar","Bar - Zupci",42.0651,19.1451],
-[145,"Manja radnja Tuđemili","Bar","Bar - Zupci",42.1551,19.1351],
-[146,"Lokalna radnja Klinci (Luštica)","Herceg Novi","Luštica - Zakuč",42.4112,18.6151],
-[147,"Seoski dućan Tići","Herceg Novi","Luštica - Zakuč",42.4051,18.6251],
-[148,"Manja radnja Lješevići","Kotor","Grbalj - Zakuč",42.3651,18.7351],
-[149,"Seoska prodavnica Nalježići (gornji dio)","Kotor","Grbalj - Zakuč",42.3612,18.7512],
-[150,"Seoska radnja Veliki Ostros","Bar","Bar - Ostros",42.0815,19.3555],
-[151,"Lokalni dućan Mali Ostros","Bar","Bar - Ostros",42.0751,19.3381]
-];
-
-// Pretvori u objekte {id, naziv, lat, lon}
-const tacke = objekti.map(([id, naziv, opstina, region, lat, lon]) => ({id, naziv, opstina, region, lat, lon}));
-
-// POČETNA TAČKA: Lastva Grbaljska (id = 19)
-const START_ID = 19;
-const startIdx = tacke.findIndex(t => t.id === START_ID);
-
 // ---------- MAPA ----------
-const map = L.map('map').setView([42.30, 18.85], 10);
+const map = L.map('map').setView([42.35, 18.85], 10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '© OpenStreetMap'
 }).addTo(map);
 
-const markersLayer = L.layerGroup().addTo(map);
-const routeLayer = L.layerGroup().addTo(map);
+const cluster = L.markerClusterGroup({ maxClusterRadius: 40 }).addTo(map);
 
-// ---------- CRtanje markera (mali sivi pinovi) ----------
-tacke.forEach(t => {
-  const jeStart = t.id === START_ID;
-  const icon = L.divIcon({
-    className: '',
-    html: `<div style="background:${jeStart ? '#e74c3c' : '#2c3e50'};width:${jeStart ? 18 : 8}px;height:${jeStart ? 18 : 8}px;border-radius:50%;border:${jeStart ? '3px solid #fff' : '1px solid #fff'};box-shadow:0 0 3px rgba(0,0,0,0.6);"></div>`,
-    iconSize: [jeStart ? 24 : 10, jeStart ? 24 : 10],
-    iconAnchor: [jeStart ? 12 : 5, jeStart ? 12 : 5]
-  });
-  L.marker([t.lat, t.lon], { icon })
-    .bindPopup(`<b>#${t.id} ${t.naziv}</b><br>${t.opstina} — ${t.region}`)
-    .addTo(markersLayer);
-});
+// ---------- BBOX za Boku + Budvu + Bar ----------
+// Pokriva: Herceg Novi (zapad), Bar (istok), Kotor/Tivat (centar), Budva (jug)
+const BBOX = "41.95,18.45,42.70,19.40"; // south,west,north,east
 
-// ---------- POMOĆNE FUNKCIJE ----------
-function haversine(a, b) {
-  const R = 6371;
-  const dLat = (b.lat - a.lat) * Math.PI/180;
-  const dLon = (b.lon - a.lon) * Math.PI/180;
-  const la1 = a.lat * Math.PI/180, la2 = b.lat * Math.PI/180;
-  const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
-  return 2*R*Math.asin(Math.sqrt(h));
-}
+let sviPodaci = [];
 
-// Nearest Neighbor
-function nearestNeighbor(start) {
-  const n = tacke.length;
-  const visited = new Array(n).fill(false);
-  const route = [start];
-  visited[start] = true;
-  let cur = start;
-  for (let k = 1; k < n; k++) {
-    let best = -1, bestD = Infinity;
-    for (let j = 0; j < n; j++) {
-      if (visited[j]) continue;
-      const d = haversine(tacke[cur], tacke[j]);
-      if (d < bestD) { bestD = d; best = j; }
-    }
-    route.push(best);
-    visited[best] = true;
-    cur = best;
+// ---------- OVERPASS QUERY ----------
+async function ucitajProdavnice() {
+  const stats = document.getElementById('stats');
+  stats.innerHTML = '⏳ Povlačim podatke iz OpenStreetMap... (10–30 s)';
+
+  // Tražimo sve što je shop=* u kategorijama hrane
+  const query = `
+    [out:json][timeout:90];
+    (
+      node["shop"~"^(convenience|supermarket|grocery|general|bakery|greengrocer|butcher|deli|kiosk|frozen_food|health_food|pastry|seafood)$"](${BBOX});
+      way["shop"~"^(convenience|supermarket|grocery|general|bakery|greengrocer|butcher|deli|kiosk|frozen_food|health_food|pastry|seafood)$"](${BBOX});
+    );
+    out center tags;
+  `;
+
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    sviPodaci = data.elements
+      .filter(el => {
+        const lat = el.lat ?? el.center?.lat;
+        const lon = el.lon ?? el.center?.lon;
+        return lat && lon;
+      })
+      .map(el => ({
+        id: el.id,
+        naziv: el.tags?.name || '(bez naziva)',
+        tip: el.tags?.shop || 'shop',
+        lat: el.lat ?? el.center.lat,
+        lon: el.lon ?? el.center.lon,
+        ulica: [el.tags?.['addr:street'], el.tags?.['addr:housenumber']].filter(Boolean).join(' '),
+        mesto: el.tags?.['addr:city'] || el.tags?.['addr:place'] || '',
+        opstina: el.tags?.['addr:municipality'] || '',
+        tel: el.tags?.phone || '',
+        osmLink: `https://www.openstreetmap.org/${el.type}/${el.id}`
+      }));
+
+    prikazi();
+  } catch (err) {
+    stats.innerHTML = '❌ Greška: ' + err.message + '<br>Pokušaj ponovo — Overpass server zna biti zauzet.';
   }
-  return route;
 }
 
-// 2-opt poboljšanje
-function twoOpt(route) {
-  const n = route.length;
-  let improved = true, iter = 0;
-  while (improved && iter < 20) {
-    improved = false; iter++;
-    for (let i = 1; i < n - 1; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const a = tacke[route[i-1]], b = tacke[route[i]];
-        const c = tacke[route[j]], d = tacke[route[(j+1) % n]];
-        const before = haversine(a,b) + haversine(c,d);
-        const after  = haversine(a,c) + haversine(b,d);
-        if (after < before - 0.001) {
-          let l = i, r = j;
-          while (l < r) { [route[l], route[r]] = [route[r], route[l]]; l++; r--; }
-          improved = true;
-        }
-      }
-    }
-  }
-  return route;
-}
+// ---------- PRIKAZ ----------
+function prikazi() {
+  cluster.clearLayers();
+  const lista = document.getElementById('lista');
+  lista.innerHTML = '';
 
-function routeDistance(route) {
-  let d = 0;
-  for (let i = 1; i < route.length; i++) d += haversine(tacke[route[i-1]], tacke[route[i]]);
-  return d;
-}
+  // Grupisanje po tipu (boje)
+  const boje = {
+    supermarket:    '#e74c3c',
+    convenience:    '#3498db',
+    grocery:        '#27ae60',
+    general:        '#f39c12',
+    bakery:         '#9b59b6',
+    greengrocer:    '#16a085',
+    butcher:        '#c0392b',
+    kiosk:          '#7f8c8d',
+    deli:           '#d35400',
+    default:        '#555'
+  };
 
-// ---------- PRIKAZ RUTE ----------
-let trenutnaRuta = []; // niz indeksa u tacke
-let ukupnaDistanca = 0;
-
-function nacrtajRutuOSRM(coordsLatLng) {
-  routeLayer.clearLayers();
-  if (!coordsLatLng || coordsLatLng.length === 0) return;
-  L.polyline(coordsLatLng, { color: '#0288d1', weight: 4, opacity: 0.85 }).addTo(routeLayer);
-}
-
-function nacrtajRutuPraveLinije(route) {
-  routeLayer.clearLayers();
-  const latlngs = route.map(i => [tacke[i].lat, tacke[i].lon]);
-  L.polyline(latlngs, {
-    color: '#e67e22', weight: 3, opacity: 0.8, dashArray: '6,6'
-  }).addTo(routeLayer);
-}
-
-function dodajBrojeveNaRutu(route) {
-  route.forEach((idx, pozicija) => {
-    const t = tacke[idx];
-    const jeStart = pozicija === 0;
+  sviPodaci.forEach((p, i) => {
+    const boja = boje[p.tip] || boje.default;
     const icon = L.divIcon({
       className: '',
-      html: `<div style="background:${jeStart ? '#e74c3c' : '#0288d1'};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.6);">${pozicija + 1}</div>`,
-      iconSize: [26,26], iconAnchor: [13,13]
+      html: `<div style="background:${boja};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.6);"></div>`,
+      iconSize: [16,16], iconAnchor: [8,8]
     });
-    L.marker([t.lat, t.lon], { icon, zIndexOffset: 1000 })
-      .bindPopup(`<b>${pozicija + 1}. ${t.naziv}</b><br>${t.opstina} — ${t.region}<br>Lat: ${t.lat}, Lon: ${t.lon}`)
-      .addTo(routeLayer);
-  });
-}
 
-function popuniListu(route) {
-  const list = document.getElementById('routeList');
-  list.innerHTML = '';
-  route.forEach((idx, i) => {
-    const t = tacke[idx];
+    L.marker([p.lat, p.lon], { icon })
+      .bindPopup(`
+        <b>${p.naziv}</b><br>
+        <b>Tip:</b> ${p.tip}<br>
+        ${p.ulica ? '<b>Adresa:</b> ' + p.ulica + '<br>' : ''}
+        ${p.mesto ? '<b>Mesto:</b> ' + p.mesto + '<br>' : ''}
+        ${p.tel ? '<b>Tel:</b> ' + p.tel + '<br>' : ''}
+        <small>OSM: ${p.id}</small><br>
+        <a href="${p.osmLink}" target="_blank">OSM</a> ·
+        <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank">Google Maps</a>
+      `)
+      .addTo(cluster);
+
     const div = document.createElement('div');
-    div.className = 'route-item' + (i === 0 ? ' start' : '');
-    div.innerHTML = `<div class="num">${i + 1}</div><div class="name">${t.naziv}</div>`;
-    div.onclick = () => map.setView([t.lat, t.lon], 16);
-    list.appendChild(div);
+    div.className = 'item';
+    div.innerHTML = `<div class="naziv">${p.naziv}</div>
+                     <div class="meta">${p.tip}${p.mesto ? ' · ' + p.mesto : ''}</div>`;
+    div.onclick = () => map.setView([p.lat, p.lon], 17);
+    lista.appendChild(div);
   });
+
+  document.getElementById('stats').innerHTML =
+    `✅ <b>${sviPodaci.length}</b> stvarnih prodavnica pronađeno u OSM bazi.<br>
+     Prikaz na mapi sa klasterima. Klikni na stavku u listi za zumiranje.`;
+
+  if (sviPodaci.length > 0) {
+    const bounds = L.latLngBounds(sviPodaci.map(p => [p.lat, p.lon]));
+    map.fitBounds(bounds.pad(0.1));
+  }
 }
 
-// ---------- OSRM ruta preko puteva ----------
-async function fetchOSRMRoute(route) {
-  const CHUNK = 80;
-  const allCoords = [];
-  for (let i = 0; i < route.length - 1; i += CHUNK - 1) {
-    const chunk = route.slice(i, Math.min(i + CHUNK, route.length));
-    if (chunk.length < 2) break;
-    const coords = chunk.map(idx => `${tacke[idx].lon},${tacke[idx].lat}`).join(';');
-    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('OSRM HTTP ' + res.status);
-    const data = await res.json();
-    if (!data.routes || !data.routes[0]) throw new Error('Nema rute');
-    const geom = data.routes[0].geometry.coordinates;
-    for (let k = (i === 0 ? 0 : 1); k < geom.length; k++) {
-      allCoords.push([geom[k][1], geom[k][0]]);
-    }
-  }
-  return allCoords;
-}
-
-// ---------- DUGMAD ----------
-document.getElementById('btnRoute').onclick = async () => {
-  const loading = document.getElementById('loading');
-  loading.style.display = 'block';
-  try {
-    // 1) Izračunaj redosled
-    let route = nearestNeighbor(startIdx);
-    route = twoOpt(route);
-    trenutnaRuta = route;
-    const dist = routeDistance(route);
-    ukupnaDistanca = dist;
-
-    routeLayer.clearLayers();
-    dodajBrojeveNaRutu(route);
-    popuniListu(route);
-
-    document.getElementById('stats').innerHTML =
-      `✅ <b>Ruta izračunata</b><br>
-       Start: <b>Lastva Grbaljska</b><br>
-       Objekata: <b>${route.length}</b><br>
-       Vazdušna distanca: <b>${dist.toFixed(1)} km</b><br>
-       <i>Učitavam put preko OSRM...</i>`;
-
-    // 2) Pokušaj OSRM
-    try {
-      const coords = await fetchOSRMRoute(route);
-      nacrtajRutuOSRM(coords);
-      // Izračunaj stvarnu dužinu rute po putevima
-      let roadDist = 0;
-      for (let i = 1; i < coords.length; i++) {
-        roadDist += haversine(
-          {lat: coords[i-1][0], lon: coords[i-1][1]},
-          {lat: coords[i][0], lon: coords[i][1]}
-        );
-      }
-      document.getElementById('stats').innerHTML =
-        `✅ <b>Ruta izračunata</b><br>
-         Start: <b>Lastva Grbaljska</b><br>
-         Objekata: <b>${route.length}</b><br>
-         Vazdušna distanca: <b>${dist.toFixed(1)} km</b><br>
-         Procenjena putna distanca: <b>~${roadDist.toFixed(0)} km</b>`;
-    } catch (err) {
-      console.warn('OSRM greška:', err);
-      nacrtajRutuPraveLinije(route);
-      document.getElementById('stats').innerHTML =
-        `⚠️ <b>OSRM nedostupan</b> — prikazane prave linije<br>
-         Start: <b>Lastva Grbaljska</b><br>
-         Objekata: <b>${route.length}</b><br>
-         Vazdušna distanca: <b>${dist.toFixed(1)} km</b>`;
-    }
-  } catch (err) {
-    alert('Greška: ' + err.message);
-  } finally {
-    loading.style.display = 'none';
-  }
+// ---------- CSV EXPORT ----------
+document.getElementById('btnCSV').onclick = () => {
+  if (!sviPodaci.length) { alert('Prvo učitaj podatke.'); return; }
+  const header = 'Naziv,Tip,Ulica,Mesto,Opstina,Telefon,Latitude,Longitude,OSM_ID\n';
+  const rows = sviPodaci.map(p =>
+    `"${p.naziv}","${p.tip}","${p.ulica}","${p.mesto}","${p.opstina}","${p.tel}",${p.lat},${p.lon},${p.id}`
+  ).join('\n');
+  const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'prodavnice_osm.csv';
+  link.click();
 };
 
-document.getElementById('btnLine').onclick = () => {
-  if (!trenutnaRuta.length) { alert('Prvo izračunaj rutu.'); return; }
-  routeLayer.clearLayers();
-  nacrtajRutuPraveLinije(trenutnaRuta);
-  dodajBrojeveNaRutu(trenutnaRuta);
-};
+document.getElementById('btnLoad').onclick = ucitajProdavnice;
 
-document.getElementById('btnClear').onclick = () => {
-  routeLayer.clearLayers();
-  trenutnaRuta = [];
-  document.getElementById('routeList').innerHTML = '';
-  document.getElementById('stats').textContent = 'Ruta nije izračunata.';
-};
-
-document.getElementById('btnGmaps').onclick = () => {
-  if (!trenutnaRuta.length) { alert('Prvo izračunaj rutu.'); return; }
-  // Google Maps podržava ~10 tačaka; pravimo link sa prvih 10
-  const first = trenutnaRuta.slice(0, 10).map(i => `${tacke[i].lat},${tacke[i].lon}`).join('/');
-  const url = `https://www.google.com/maps/dir/${first}`;
-  navigator.clipboard.writeText(url).then(() => {
-    alert('Kopiran link za prvih 10 tačaka u Google Maps:\n\n' + url);
-  }).catch(() => {
-    prompt('Kopiraj link:', url);
-  });
-};
+// Automatski učitaj
+ucitajProdavnice();
 </script>
 </body>
 </html>
