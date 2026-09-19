@@ -2,38 +2,38 @@
 <html lang="sr">
 <head>
 <meta charset="UTF-8">
-<title>Stvarne prodavnice – Boka i Primorje (OSM)</title>
+<title>Prodavnice – široka pretraga (OSM)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <style>
-  html, body { margin:0; height:100%; font-family: 'Segoe UI', sans-serif; }
-  #map { position:absolute; top:0; bottom:0; left:360px; right:0; }
+  html, body { margin:0; height:100%; font-family:'Segoe UI',sans-serif; }
+  #map { position:absolute; top:0; bottom:0; left:380px; right:0; }
   #sidebar {
-    position:absolute; top:0; bottom:0; left:0; width:360px;
+    position:absolute; top:0; bottom:0; left:0; width:380px;
     background:#1e2a38; color:#eee; overflow-y:auto; padding:15px; z-index:1000;
   }
   h2 { margin:0 0 8px; font-size:16px; color:#4fc3f7; }
   p.note { font-size:12px; color:#90a4ae; line-height:1.5; margin:0 0 12px; }
-  button {
-    width:100%; padding:10px; margin-bottom:6px; border:none; border-radius:5px;
-    background:#0288d1; color:#fff; font-weight:600; cursor:pointer; font-size:13px;
+  input, button {
+    width:100%; padding:9px; margin-bottom:6px; border-radius:5px;
+    border:1px solid #455a64; background:#263238; color:#eee; font-size:13px;
   }
+  button { background:#0288d1; border:none; font-weight:600; cursor:pointer; }
   button:hover { background:#039be5; }
-  button.secondary { background:#455a64; }
-  #stats {
-    background:#263238; padding:10px; border-radius:5px; font-size:12px;
-    color:#b0bec5; line-height:1.6; margin:10px 0;
-  }
+  button.sec { background:#455a64; }
+  #stats { background:#263238; padding:10px; border-radius:5px; font-size:12px; color:#b0bec5; line-height:1.6; margin:10px 0;}
   #stats b { color:#4fc3f7; }
   #lista { font-size:12px; }
-  .item {
-    padding:6px; border-bottom:1px solid #263238; cursor:pointer;
-  }
+  .item { padding:7px; border-bottom:1px solid #263238; cursor:pointer; }
   .item:hover { background:#263238; }
   .item .naziv { color:#fff; font-weight:600; }
   .item .meta { color:#90a4ae; font-size:11px; }
+  .tagbadge {
+    display:inline-block; background:#37474f; color:#4fc3f7; font-size:10px;
+    padding:1px 5px; border-radius:3px; margin-right:3px;
+  }
   .leaflet-popup-content { font-size:13px; }
   .leaflet-popup-content b { color:#01579b; }
 </style>
@@ -41,14 +41,16 @@
 <body>
 
 <div id="sidebar">
-  <h2>🛒 Stvarne prodavnice (OSM)</h2>
+  <h2>🛒 Široka pretraga prodavnica</h2>
   <p class="note">
-    Podaci se povlače <b>direktno iz OpenStreetMap</b> — baza koju su mapirali ljudi na terenu.
-    Ovo su <b>stvarne</b> lokacije, ne aproksimacije.
+    Traži <b>sve</b> što liči na prodavnicu: po <code>shop=*</code>, <code>amenity=*</code>,
+    i po <b>imenu</b> (market, prodavnica, dućan, radnja, minimarket, piljara…).
+    Pokriva celu Boku + Budvu + Bar.
   </p>
-  <button id="btnLoad">Učitaj prodavnice iz OSM</button>
-  <button id="btnCSV" class="secondary">Preuzmi kao CSV</button>
-  <div id="stats">Klikni „Učitaj" da povučeš podatke.</div>
+  <input type="text" id="custom" placeholder="Dodatna reč u imenu (npr. Slavica)">
+  <button id="btnLoad">Učitaj iz OSM</button>
+  <button id="btnCSV" class="sec">Preuzmi kao CSV</button>
+  <div id="stats">Klikni „Učitaj".</div>
   <div id="lista"></div>
 </div>
 
@@ -57,31 +59,34 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-// ---------- MAPA ----------
 const map = L.map('map').setView([42.35, 18.85], 10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '© OpenStreetMap'
 }).addTo(map);
-
 const cluster = L.markerClusterGroup({ maxClusterRadius: 40 }).addTo(map);
 
-// ---------- BBOX za Boku + Budvu + Bar ----------
-// Pokriva: Herceg Novi (zapad), Bar (istok), Kotor/Tivat (centar), Budva (jug)
-const BBOX = "41.95,18.45,42.70,19.40"; // south,west,north,east
-
+const BBOX = "41.95,18.45,42.70,19.40";
 let sviPodaci = [];
 
-// ---------- OVERPASS QUERY ----------
-async function ucitajProdavnice() {
+async function ucitaj() {
   const stats = document.getElementById('stats');
-  stats.innerHTML = '⏳ Povlačim podatke iz OpenStreetMap... (10–30 s)';
+  stats.innerHTML = '⏳ Povlačim iz OSM-a... (može 20–40 s)';
 
-  // Tražimo sve što je shop=* u kategorijama hrane
+  const custom = document.getElementById('custom').value.trim();
+  const customFilter = custom ? `["name"~"${custom}",i]` : '';
+
+  // Široka pretraga: shop, amenity, i po imenu
   const query = `
-    [out:json][timeout:90];
+    [out:json][timeout:120];
     (
-      node["shop"~"^(convenience|supermarket|grocery|general|bakery|greengrocer|butcher|deli|kiosk|frozen_food|health_food|pastry|seafood)$"](${BBOX});
-      way["shop"~"^(convenience|supermarket|grocery|general|bakery|greengrocer|butcher|deli|kiosk|frozen_food|health_food|pastry|seafood)$"](${BBOX});
+      node["shop"](${BBOX});
+      way["shop"](${BBOX});
+      node["amenity"~"^(convenience|marketplace)$"](${BBOX});
+      way["amenity"~"^(convenience|marketplace)$"](${BBOX});
+      node["name"~"prodavnica|market|minimarket|dućan|ducan|radnja|piljara|Slavica|mesara|pekara|bakery",i](${BBOX});
+      way["name"~"prodavnica|market|minimarket|dućan|ducan|radnja|piljara|Slavica|mesara|pekara|bakery",i](${BBOX});
+      node${customFilter}(${BBOX});
+      way${customFilter}(${BBOX});
     );
     out center tags;
   `;
@@ -94,67 +99,67 @@ async function ucitajProdavnice() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
 
-    sviPodaci = data.elements
-      .filter(el => {
-        const lat = el.lat ?? el.center?.lat;
-        const lon = el.lon ?? el.center?.lon;
-        return lat && lon;
-      })
-      .map(el => ({
+    // Deduplikacija po OSM id-u
+    const seen = new Set();
+    sviPodaci = [];
+    data.elements.forEach(el => {
+      const lat = el.lat ?? el.center?.lat;
+      const lon = el.lon ?? el.center?.lon;
+      if (!lat || !lon) return;
+      const key = el.type + '/' + el.id;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      sviPodaci.push({
         id: el.id,
+        osmType: el.type,
         naziv: el.tags?.name || '(bez naziva)',
-        tip: el.tags?.shop || 'shop',
-        lat: el.lat ?? el.center.lat,
-        lon: el.lon ?? el.center.lon,
+        shop: el.tags?.shop || '',
+        amenity: el.tags?.amenity || '',
         ulica: [el.tags?.['addr:street'], el.tags?.['addr:housenumber']].filter(Boolean).join(' '),
         mesto: el.tags?.['addr:city'] || el.tags?.['addr:place'] || '',
-        opstina: el.tags?.['addr:municipality'] || '',
         tel: el.tags?.phone || '',
+        lat, lon,
         osmLink: `https://www.openstreetmap.org/${el.type}/${el.id}`
-      }));
+      });
+    });
 
     prikazi();
   } catch (err) {
-    stats.innerHTML = '❌ Greška: ' + err.message + '<br>Pokušaj ponovo — Overpass server zna biti zauzet.';
+    stats.innerHTML = '❌ Greška: ' + err.message + '<br>Pokušaj ponovo — Overpass je često zauzet.';
   }
 }
 
-// ---------- PRIKAZ ----------
 function prikazi() {
   cluster.clearLayers();
   const lista = document.getElementById('lista');
   lista.innerHTML = '';
 
-  // Grupisanje po tipu (boje)
   const boje = {
-    supermarket:    '#e74c3c',
-    convenience:    '#3498db',
-    grocery:        '#27ae60',
-    general:        '#f39c12',
-    bakery:         '#9b59b6',
-    greengrocer:    '#16a085',
-    butcher:        '#c0392b',
-    kiosk:          '#7f8c8d',
-    deli:           '#d35400',
-    default:        '#555'
+    supermarket:'#e74c3c', convenience:'#3498db', grocery:'#27ae60',
+    general:'#f39c12', bakery:'#9b59b6', greengrocer:'#16a085',
+    butcher:'#c0392b', kiosk:'#7f8c8d', deli:'#d35400',
+    marketplace:'#00897b', _named:'#ec407a', default:'#555'
   };
 
-  sviPodaci.forEach((p, i) => {
-    const boja = boje[p.tip] || boje.default;
+  sviPodaci.forEach(p => {
+    let tip = p.shop || p.amenity || (p.naziv !== '(bez naziva)' ? '_named' : 'default');
+    const boja = boje[tip] || boje.default;
+
     const icon = L.divIcon({
       className: '',
-      html: `<div style="background:${boja};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.6);"></div>`,
-      iconSize: [16,16], iconAnchor: [8,8]
+      html: `<div style="background:${boja};width:11px;height:11px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.6);"></div>`,
+      iconSize: [15,15], iconAnchor: [7.5,7.5]
     });
 
     L.marker([p.lat, p.lon], { icon })
       .bindPopup(`
         <b>${p.naziv}</b><br>
-        <b>Tip:</b> ${p.tip}<br>
+        ${p.shop ? '<span class="tagbadge">shop=' + p.shop + '</span>' : ''}
+        ${p.amenity ? '<span class="tagbadge">amenity=' + p.amenity + '</span>' : ''}
+        <br>
         ${p.ulica ? '<b>Adresa:</b> ' + p.ulica + '<br>' : ''}
         ${p.mesto ? '<b>Mesto:</b> ' + p.mesto + '<br>' : ''}
-        ${p.tel ? '<b>Tel:</b> ' + p.tel + '<br>' : ''}
-        <small>OSM: ${p.id}</small><br>
         <a href="${p.osmLink}" target="_blank">OSM</a> ·
         <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank">Google Maps</a>
       `)
@@ -163,39 +168,36 @@ function prikazi() {
     const div = document.createElement('div');
     div.className = 'item';
     div.innerHTML = `<div class="naziv">${p.naziv}</div>
-                     <div class="meta">${p.tip}${p.mesto ? ' · ' + p.mesto : ''}</div>`;
+                     <div class="meta">${p.shop || p.amenity || '—'}${p.mesto ? ' · ' + p.mesto : ''}</div>`;
     div.onclick = () => map.setView([p.lat, p.lon], 17);
     lista.appendChild(div);
   });
 
   document.getElementById('stats').innerHTML =
-    `✅ <b>${sviPodaci.length}</b> stvarnih prodavnica pronađeno u OSM bazi.<br>
-     Prikaz na mapi sa klasterima. Klikni na stavku u listi za zumiranje.`;
+    `✅ <b>${sviPodaci.length}</b> objekata pronađeno.<br>
+     Uključeni su i oni bez <code>shop</code> taga ako im ime sadrži ključne reči.`;
 
-  if (sviPodaci.length > 0) {
-    const bounds = L.latLngBounds(sviPodaci.map(p => [p.lat, p.lon]));
-    map.fitBounds(bounds.pad(0.1));
+  if (sviPodaci.length) {
+    const b = L.latLngBounds(sviPodaci.map(p => [p.lat, p.lon]));
+    map.fitBounds(b.pad(0.1));
   }
 }
 
-// ---------- CSV EXPORT ----------
+document.getElementById('btnLoad').onclick = ucitaj;
 document.getElementById('btnCSV').onclick = () => {
-  if (!sviPodaci.length) { alert('Prvo učitaj podatke.'); return; }
-  const header = 'Naziv,Tip,Ulica,Mesto,Opstina,Telefon,Latitude,Longitude,OSM_ID\n';
-  const rows = sviPodaci.map(p =>
-    `"${p.naziv}","${p.tip}","${p.ulica}","${p.mesto}","${p.opstina}","${p.tel}",${p.lat},${p.lon},${p.id}`
+  if (!sviPodaci.length) return alert('Prvo učitaj.');
+  const h = 'Naziv,Shop,Amenity,Ulica,Mesto,Telefon,Lat,Lon,OSM\n';
+  const r = sviPodaci.map(p =>
+    `"${p.naziv}","${p.shop}","${p.amenity}","${p.ulica}","${p.mesto}","${p.tel}",${p.lat},${p.lon},${p.osmLink}`
   ).join('\n');
-  const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = 'prodavnice_osm.csv';
-  link.click();
+  const blob = new Blob([h+r], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'prodavnice_osm.csv';
+  a.click();
 };
 
-document.getElementById('btnLoad').onclick = ucitajProdavnice;
-
-// Automatski učitaj
-ucitajProdavnice();
+ucitaj();
 </script>
 </body>
 </html>
